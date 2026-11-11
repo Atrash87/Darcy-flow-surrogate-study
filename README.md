@@ -1,147 +1,171 @@
-# Reduced-order surrogate modelling for parameterized steady Darcy flow
+# Reduced-order surrogates for parameterized Darcy flow
 
-An independent computational study of sampling strategies, surrogate regression, and proper orthogonal decomposition (POD) rank for a parameterized steady Darcy-flow problem.
+A small side project: how well can a fast surrogate model replace a Darcy-flow solver, and what limits its accuracy? I looked at three things: how the training simulations are chosen, which regression model is used, and how many POD modes are kept.
 
-> **Scope.** This repository documents a computational investigation and its current results. It is not a reproduction of another group's complete study, a validated field-scale model, or a claim that one surrogate method is universally superior. Results are conditional on the model, discretization, parameter bounds, sampling designs, and evaluation protocol described below.
+I was inspired by the work of **[Dr. NAME, paper/topic]** and wanted to try related questions hands-on. This is a personal exploration, not a paper. I am a geologist with a data-analytics background, I used AI tools to help write the code and the text, and every result here is only as good as the setup described below. Corrections and feedback are very welcome.
 
-## Research question
+## In short
 
-How do sampling design, surrogate regression, and POD representation affect the accuracy and computational cost of predicting pressure fields and boundary flux in a parameterized Darcy-flow model?
+1. **POD + Gaussian-process regression (POD-GPR) beat a direct neural network by about 8×** on held-out test cases (relative L2 error 9.6e-4 vs 7.9e-3). The two used different sampling strategies, so this is not a clean comparison.
+2. **With the data and POD basis held fixed, GPR beat five other regressors** (pressure error 1.0e-3 vs 1.7e-2 to 7.0e-2).
+3. **More POD modes help only up to a point.** Pressure error falls until about 64 to 96 modes, then flattens at about 1.6e-4, where the regression, not the POD truncation, is the limit.
+4. **The pattern angle controls most of the variance in mean pressure** (Sobol first-order 0.76, total 0.93). The mean log-permeability has no effect on pressure, as expected.
 
-The work is organized as **two connected investigations**:
+## The problem
 
-1. **Sampling and initial surrogate comparison** — compare sampling designs and an initial POD-GPR surrogate with a direct neural-network baseline; examine global sensitivity of a pressure quantity of interest.
-2. **Controlled POD-regression study** — compare regression families on a shared POD representation, then vary POD rank to separate representation error from regression error.
+Steady Darcy flow on the unit square, -∇·(k ∇p) = 0, with p = 1 on the left, p = 0 on the right and no flow through the top and bottom. Permeability is k = exp(μ + a·Ψ_θ(x, y)), where Ψ_θ is a fixed synthetic heterogeneity pattern rotated by an angle θ.
 
-The second investigation follows from a limitation identified in the first: the initial final comparison selected different sampling strategies for the two surrogate approaches, so it could not isolate the effect of regression method alone.
+| Parameter | Range | Note |
+|---|---|---|
+| `logk_mean` (μ) | -1 to 1 | Scales k by a constant. Leaves pressure unchanged, only scales flux. |
+| `logk_amp` (a) | 0.2 to 1.5 | Strength of the heterogeneity pattern. |
+| `pattern_angle_deg` (θ) | 0° to 180° | Rotates the pattern. Called `logk_angle` in the sampling-study plots. |
 
-## Problem
+The solver is a cell-centred finite-volume code on a 64 × 64 grid (`src/darcy.py`). The ranges are study choices, not real geological limits. Because `logk_mean` cannot change the pressure, the pressure surrogates in the controlled study (sections 3 and 4) use only amplitude and angle. "Flux" throughout means the total inflow through the left boundary. It is computed from the predicted pressure in the first column of cells and uses all three parameters.
 
-The steady scalar Darcy equation is solved on the unit square:
+## Results
 
-\[
--\nabla\cdot(k(x,y)\nabla p)=0,
-\]
+### 1. Sampling strategy, and POD-GPR vs a direct neural network
 
-with fixed pressure on the left and right boundaries and no-flow conditions on the top and bottom. Permeability is positive and spatially heterogeneous, parameterized by
+I compared four ways of choosing training simulations: random, Latin hypercube (LHS), scrambled Sobol sequence, and adaptive (start from LHS points, then add batches where the POD-GPR is most uncertain). Each was used with POD-GPR and with a direct neural network (NN) that maps parameters straight to the pressure field. Training sizes were 16 to 256, with 3 repeats each. The configurations chosen on validation data were refitted and tested on 256 held-out cases.
 
-\[
-(\log k_{\mathrm{mean}},\; a,\; \theta),
-\]
+> 🖼️ **FIGURE 1 — insert here:** `figures/investigation1_validation_error_vs_samples.png`
 
-where the angle rotates a scalar spatial heterogeneity pattern. The investigated parameter bounds are
+*Validation error (mean ± SD of 3 runs) against the number of full-order training solves, for each sampling strategy. Left: POD-GPR. Right: direct NN.*
 
-| Parameter | Lower | Upper |
-|---|---:|---:|
-| `logk_mean` | -1.0 | 1.0 |
-| `logk_amp` | 0.2 | 1.5 |
-| `pattern_angle_deg` | 0° | 180° |
+- **POD-GPR needs far fewer simulations.** At 128 solves it is at 3e-3 to 1.2e-2, while the NN is still at 4e-2 to 6e-2.
+- **At 256 solves, random, LHS and adaptive sampling are indistinguishable** for POD-GPR (all about 1.0 to 1.1e-3). Sobol sampling was erratic (individual runs: 8.7e-4, 5.5e-3 and 1.8e-2).
+- **Adaptive sampling had the lowest mean error at 32, 64 and 128 solves**, but with 3 repeats and overlapping spread this is a hint, not a result.
 
-These are the bounds used in the experiments; they should be treated as study-domain choices, not independently established physical limits. The main surrogate experiments use a 64 × 64 cell-centred finite-volume discretization.
+| Model | Sampling (picked on validation) | Training solves | POD modes | Test rel. L2 (global) | Worst test case |
+|---|---|---|---|---|---|
+| POD-GPR | LHS | 256 | 32 | 9.58e-4 | 3.76e-3 |
+| Direct NN | Sobol | 256 | - | 7.92e-3 | 3.21e-2 |
 
-For the supplied PDE and pressure boundary conditions, adding a spatially constant value to `logk` multiplies permeability everywhere by the same positive factor. This leaves the pressure solution invariant while scaling Darcy flux. Accordingly, the controlled pressure regressors use `logk_amp` and `pattern_angle_deg`; all three parameters are retained when computing flux.
+> 🖼️ **FIGURE 2 — insert here:** `figures/investigation1_parity_podgpr_vs_nn.png`
 
-## Main findings
+*Surrogate vs full-order pressure on the 256 test cases. Left: POD-GPR. Right: direct NN.*
 
-### Investigation 1 — sampling and initial surrogate comparison
+For POD-GPR the largest pointwise error on any test case is about 0.008 on a pressure range of 0 to 1, and it is spatially structured rather than random.
 
-- Validation selected POD-GPR with Latin hypercube sampling (LHS), 256 training samples, and validation mean relative error `1.026e-3` (SD `7.021e-5`).
-- Validation selected the direct neural-network (NN) model with Sobol sampling, 256 training samples, and validation mean relative error `9.769e-3` (SD `2.430e-3`).
-- On the held-out test set, POD-GPR (LHS) achieved global relative field error `9.580e-4`; the direct NN (Sobol) achieved `7.917e-3`.
-- The sensitivity analysis concerned **domain-averaged pressure**, not flux. It indicated that pattern angle had the largest influence over the selected bounds; the amplitude had a smaller first-order effect and a larger total effect, consistent with interaction effects. `logk_mean` had negligible influence on this pressure quantity of interest.
+**Two caveats.** The final models used different sampling strategies (LHS vs Sobol), so the 8× gap does not isolate the regression method. That is why section 3 exists. Also, POD-GPR used about 32 modes here (the number picked automatically by keeping 99.99% of the snapshot energy), and section 4 suggests that at 32 modes the error is mostly POD truncation. So 9.6e-4 is probably not the best POD-GPR can do with this data. I have not re-run this study with more modes.
 
-**Interpretation limit:** the final POD-GPR and direct-NN models used different selected sampling strategies. Their held-out error difference therefore cannot be attributed to regression method alone. This motivated the controlled comparison in Investigation 2.
+### 2. Which parameters matter for mean pressure?
 
-### Investigation 2 — controlled regression comparison and POD-rank sensitivity
+Sobol indices of the domain-averaged pressure, computed on the final POD-GPR surrogate with independent uniform inputs over the ranges above (4096 base samples, 200 bootstrap resamples). The estimates were stable from about 2048 base samples. <!-- TODO-VERIFY: read off the convergence plot; no convergence data file was available -->
 
-At the common final comparison (`N=256`, 64 × 64 mesh, 32 POD modes, shared training/test designs and one shared POD basis), RBF-GPR had the lowest held-out pressure and flux errors among the six tested regression families:
 
-| Regression family | Pressure global relative L2 | Flux relative L2 |
-|---|---:|---:|
-| **RBF-GPR** | **0.001004** | **0.01168** |
-| Thin-plate spline | 0.01652 | 0.04099 |
-| Multiquadric RBF | 0.02067 | 0.09248 |
-| ANN | 0.02224 | 0.05372 |
-| Tensor cubic B-spline | 0.05835 | 0.21285 |
-| Polynomial (Ridge) | 0.07043 | 0.24905 |
+| Parameter | First-order | Total-order |
+|---|---|---|
+| `logk_mean` | ≈ 0 | ≈ 0 |
+| `logk_amp` | 0.070 ± 0.021 | 0.243 ± 0.020 |
+| `pattern_angle_deg` | 0.758 ± 0.043 | 0.935 ± 0.045 |
 
-For GPR at rank 32, the held-out pressure error decomposed into a POD truncation error of `9.936e-4` and a regression-only error of `1.442e-4`. Thus, the pressure error at this rank was dominated by POD truncation.
+> 🖼️ **FIGURE 3 — insert here:** `figures/investigation1_sobol_indices.png`
 
-The fixed-RBF-GPR rank-sensitivity experiment used the same 256 training, 128 validation, and 256 test cases at every rank. The test pressure error fell from `1.572e-2` at rank 8 to approximately `1.57e-4` at rank 96. From ranks 96 to 255, additional modes produced negligible improvement: regression error became the dominant component. The validation errors at ranks 96–255 were also very close, so rank 96 is a practical knee for this particular 256-sample design, not a universally optimal rank.
+*First- and total-order Sobol indices with 95% bootstrap intervals (4096 base samples). In the plot the angle is labelled `logk_angle`.*
 
-See the [technical report](docs/technical_report.md) for methods, detailed results, qualifications, and figure placeholders.
+The angle dominates. For the amplitude, the total-order index is much larger than the first-order one, which points to interaction with the angle. The zero for `logk_mean` is a sanity check, not a finding. The intervals reflect Sobol sampling only, not surrogate error, and the analysis covers mean pressure, not flux.
 
-## Repository structure
+### 3. Six regression families on a shared POD basis
 
-```text
+Section 1 changed the model and the sampling at the same time, so here I held everything else fixed: the same 256 training cases, the same POD basis (32 modes, again from the 99.99% energy rule), the same test set, and hyperparameters chosen on validation data only.
+
+| Regression | Pressure rel. L2 | Flux rel. L2 |
+|---|---|---|
+| **GPR (RBF)** | **1.0e-3** | **1.17e-2** |
+| Thin-plate spline | 1.65e-2 | 4.10e-2 |
+| Multiquadric RBF | 2.07e-2 | 9.25e-2 |
+| ANN | 2.22e-2 | 5.37e-2 |
+| Tensor cubic B-spline | 5.84e-2 | 2.13e-1 |
+| Polynomial (Ridge) | 7.04e-2 | 2.49e-1 |
+
+> 🖼️ **FIGURE 4 — insert here (regenerate from the full N = 256 run):** `figures/investigation2_pressure_parity.png`
+
+*Surrogate vs full-order pressure on the test set for each of the six regressors.*
+
+<!-- TODO-VERIFY: only the GPR row is confirmed (it matches the rank-32 row of the rank sweep). The other five rows, the ANN iteration limit and the truncation/regression split come from technical_report.md. Check them against experiment_a_results/final_heldout_test_results.csv from the full run. -->
+At 32 modes the GPR error is mostly POD truncation (9.9e-4), not regression (1.4e-4). For the other five families nearly all of the error is regression error. The ANN stopped at its iteration limit (2500) without converging, so its number is not a fully converged result.
+
+### 4. How many POD modes?
+
+With the regression fixed to RBF-GPR and the same data at every step, I varied the number of retained POD modes and split the test error into POD truncation (what the basis cannot represent) and regression error (what the GPR gets wrong inside the basis).
+
+| POD modes | Pressure error | Truncation part | Regression part | Flux error | GPR fit time |
+|---|---|---|---|---|---|
+| 8 | 1.57e-2 | 1.57e-2 | 1.2e-4 | 1.09e-1 | 6 s |
+| 32 | 1.00e-3 | 9.9e-4 | 1.4e-4 | 1.17e-2 | 24 s |
+| 64 | 1.77e-4 | 9.6e-5 | 1.5e-4 | 1.09e-3 | 58 s |
+| 96 | 1.57e-4 | 2.6e-5 | 1.5e-4 | 7.8e-4 | 73 s |
+| 128 | 1.57e-4 | 7.0e-6 | 1.6e-4 | 7.6e-4 | 85 s |
+| 255 | 1.57e-4 | 4.9e-7 | 1.6e-4 | 7.6e-4 | 154 s |
+
+> 🖼️ **FIGURE 5 — insert here:** `figures/pod_rank_pressure_error_decomposition.png`
+
+*Held-out pressure error against POD rank, split into POD truncation and regression error.*
+
+> 🖼️ **FIGURE 6 — insert here:** `figures/pod_rank_flux_error.png`
+
+*Held-out flux error against POD rank.*
+
+Error falls quickly up to about 64 modes, while truncation dominates. From about 96 modes on, the total is flat at about 1.6e-4 because regression error has become the limit, and extra modes only add cost: fit time roughly doubles from 96 to 255 modes, and prediction time per case grows about 5×. The validation errors for 96 to 255 modes are nearly identical (8.0 to 8.1e-5), so I would call 96 a practical knee **for this 256-sample design**, not a general optimum.
+
+Flux error flattens too, at about 7.6e-4, but it is 5 to 12× larger than the pressure error at every rank. That gap is the starting point of idea 3 below.
+
+## What this does not show
+
+- The ranges and the synthetic heterogeneity pattern are not tied to a real formation. The problem is steady, scalar and isotropic.
+- Everything uses one 64 × 64 grid, so mesh independence is not tested.
+- Sections 3 and 4 each use a single train/test split. The error floor in section 4 is about 8e-5 on the validation set but 1.6e-4 on the test set, so its exact value depends on the data design.
+- The Sobol indices cover mean pressure only and carry no surrogate-training uncertainty.
+- GPR uncertainty intervals were checked in POD-coefficient space only, and they under-covered (about 82.5% for a nominal 90%). <!-- TODO-VERIFY: 82.5% comes from technical_report.md; check coefficient_coverage90 in the full-run final_heldout_test_results.csv -->
+- Summary tables of the sampling study are included, but the raw data archive from that run was not preserved, so a re-run may not reproduce those exact numbers.
+
+## Ideas for future work
+
+1. **Training size vs POD rank.** Is the ~1.6e-4 floor a data limit? Try 128 to 768 training samples at 96 and 128 modes with RBF-GPR, and track truncation error, regression error, flux error and cost. *This is the next experiment I would run.*
+2. **Regression families at higher rank.** Does GPR stay best at 96 modes? Re-running the sampling comparison with more modes would also show how much of section 1 was truncation.
+3. **Flux.** Why is flux error 5 to 12× the pressure error? Part of it may be an artefact of how flux is computed: the left-boundary inflow is a finite difference across half a grid cell next to the boundary, where the pressure drop is small, so a tiny pressure error there gets magnified. Compare it with flux through interior faces, a direct flux surrogate, or a separate POD basis for flux.
+4. **Adaptive sampling.** Does uncertainty-driven sampling reach the same accuracy with fewer solves at equal budget? My 3-repeat sweep hints at it but is too noisy to say.
+5. **Mesh generalization.** Train at 32 × 32 or 64 × 64 and test at 128 × 128.
+
+If any of these overlap with your work, I would be happy to talk.
+
+## Repository
+
+```
 src/
-  darcy.py                         finite-volume Darcy solver
-  sampling_surrogate_study.py      sampling + initial surrogate investigation
-  experiment_a.py                  controlled regression-family comparison
-  pod_rank_sensitivity.py          fixed-GPR POD-rank sensitivity
-  smoke_test.py                    reduced software/workflow check
-
+  darcy.py                         finite-volume solver
+  sampling_surrogate_study.py      sampling study, POD-GPR vs NN, Sobol analysis
+  experiment_a.py                  six-regressor comparison
+  pod_rank_sensitivity.py          POD-rank sweep
+  smoke_test.py                    quick workflow check (not research results)
 docs/
-  technical_report.md              integrated research report
+  technical_report.md              longer report with all tables
   limitations_and_reproducibility.md
-
 results/
-  initial_surrogate_investigation/ summary of reported results and data note
-  regression_comparison/           held-out comparison table
-  pod_rank_sensitivity/             rank-sensitivity CSV and summary
-
-figures/                            add the selected plots here
+  initial_surrogate_investigation/
+  regression_comparison/
+  pod_rank_sensitivity/
+figures/
 ```
 
-## Reproducibility
-
-Create an environment and install dependencies:
+Run from the repository root:
 
 ```bash
 python -m venv .venv
-# Windows PowerShell: .venv\\Scripts\\Activate.ps1
-# Linux / macOS / Git Bash: source .venv/bin/activate
+source .venv/bin/activate            # Windows PowerShell: .venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+export PYTHONPATH=src                # PowerShell: $env:PYTHONPATH = "src"
+python src/smoke_test.py             # optional: reduced run of the regression comparison
+python src/sampling_surrogate_study.py   # writes corrected_surrogate_results/
+python src/experiment_a.py               # writes experiment_a_results/
+python src/pod_rank_sensitivity.py       # writes pod_rank_sensitivity_results/
 ```
 
-Run the investigations from the repository root (the scripts import modules from `src`, so set `PYTHONPATH`):
+The sampling study needs `SALib` for the Sobol analysis. Smoke-test runs use coarse meshes and few samples. They are a software check only, and none of the numbers above come from them.
 
-```bash
-# Windows PowerShell
-$env:PYTHONPATH = "src"
-python src/sampling_surrogate_study.py
-python src/experiment_a.py
-python src/pod_rank_sensitivity.py
+## Contact
 
-# Linux / macOS / Git Bash
-export PYTHONPATH=src
-python src/sampling_surrogate_study.py
-python src/experiment_a.py
-python src/pod_rank_sensitivity.py
-```
-
-The sampling study writes to `corrected_surrogate_results/`; the controlled regression study writes to `experiment_a_results/`; the rank study writes to `pod_rank_sensitivity_results/`. Run the smoke test before expensive runs if desired:
-
-```bash
-python src/smoke_test.py
-```
-
-The first study requires SALib for Sobol analysis. The code and configurations are preserved, but the original full raw output bundle for that investigation was not included in the materials used to assemble this repository; its reported headline values are summarized in the report. The regression-comparison and rank-sensitivity summary results are included under `results/`.
-
-## Figures to add
-
-Suggested figure filenames and placement notes are listed in [`figures/README.md`](figures/README.md). The report contains explicit image placeholders. Add plots generated by the full experiments—not smoke-test plots—before sharing the repository publicly.
-
-## Limitations
-
-- Parameter bounds are exploratory study bounds, not demonstrated physical operating limits.
-- All surrogate results are conditional on the specified solver, 64 × 64 mesh, boundary conditions, and permeability parameterization.
-- The initial sampling/model comparison is confounded by the different validation-selected sampling strategies.
-- The controlled final regression comparison uses one common final training design and one held-out test design; it is not a multi-split estimate of test-performance variability.
-- The rank-sensitivity study uses one fixed training/validation/test design. It identifies a rank-error trade-off for that design, not a universal optimum.
-- The ANN reached its iteration limit in the final regression comparison; its result should be interpreted with that convergence warning.
-- GPR interval coverage is reported in POD-coefficient space, not as pointwise pressure-field coverage.
-- Mesh independence of surrogate errors has not been established by these experiments.
-
-Further detail is provided in [`docs/limitations_and_reproducibility.md`](docs/limitations_and_reproducibility.md).
+Hasan, Berlin · [email / LinkedIn / YouTube]
