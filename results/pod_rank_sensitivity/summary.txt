@@ -1,0 +1,62 @@
+EXPERIMENT A — POD REGRESSION COMPARISON
+========================================
+
+Parameter bounds: {'logk_mean': (-1.0, 1.0), 'logk_amp': (0.2, 1.5), 'pattern_angle_deg': (0.0, 180.0)}
+Pressure input features: ['logk_amp', 'pattern_angle_deg']
+Mesh: 64 x 64; POD energy tolerance: 0.0001
+Training sizes: [16, 32, 64, 128, 256]; repeats: 3; final common N: 256
+
+Validation-selected candidate at each N:
+  ANN                    N=  16 val=8.721444e-02 SD=8.241e-03 config={"alpha": 0.001, "hidden_layer_sizes": [64, 64]}
+  ANN                    N=  32 val=7.083997e-02 SD=7.507e-03 config={"alpha": 0.001, "hidden_layer_sizes": [64, 64]}
+  ANN                    N=  64 val=5.830131e-02 SD=3.739e-03 config={"alpha": 0.0001, "hidden_layer_sizes": [32, 32]}
+  ANN                    N= 128 val=2.780112e-02 SD=3.415e-03 config={"alpha": 0.0001, "hidden_layer_sizes": [64, 64]}
+  ANN                    N= 256 val=2.456812e-02 SD=3.173e-03 config={"alpha": 0.0001, "hidden_layer_sizes": [64, 64]}
+  GPR                    N=  16 val=4.944314e-02 SD=2.299e-03 config={"kernel_name": "Matern_1p5", "nu": 1.5}
+  GPR                    N=  32 val=1.917510e-02 SD=1.239e-03 config={"kernel_name": "RBF", "nu": null}
+  GPR                    N=  64 val=6.596147e-03 SD=5.041e-04 config={"kernel_name": "RBF", "nu": null}
+  GPR                    N= 128 val=1.649958e-03 SD=2.829e-04 config={"kernel_name": "RBF", "nu": null}
+  GPR                    N= 256 val=9.749397e-04 SD=2.187e-05 config={"kernel_name": "RBF", "nu": null}
+  Polynomial             N=  16 val=8.101968e-02 SD=3.311e-03 config={"alpha": 0.001, "degree": 1}
+  Polynomial             N=  32 val=7.311919e-02 SD=8.911e-04 config={"alpha": 0.001, "degree": 2}
+  Polynomial             N=  64 val=7.223360e-02 SD=5.352e-04 config={"alpha": 0.001, "degree": 2}
+  Polynomial             N= 128 val=7.006173e-02 SD=6.712e-04 config={"alpha": 0.001, "degree": 2}
+  Polynomial             N= 256 val=6.970959e-02 SD=1.155e-04 config={"alpha": 0.001, "degree": 2}
+  RBF_Multiquadric       N=  16 val=8.752438e-02 SD=3.447e-03 config={"epsilon": 4.0, "smoothing": 1e-06}
+  RBF_Multiquadric       N=  32 val=7.314596e-02 SD=8.389e-03 config={"epsilon": 0.5, "smoothing": 1e-06}
+  RBF_Multiquadric       N=  64 val=6.310065e-02 SD=4.867e-03 config={"epsilon": 4.0, "smoothing": 1e-06}
+  RBF_Multiquadric       N= 128 val=3.611489e-02 SD=9.119e-03 config={"epsilon": 4.0, "smoothing": 1e-06}
+  RBF_Multiquadric       N= 256 val=1.832165e-02 SD=2.111e-03 config={"epsilon": 4.0, "smoothing": 1e-06}
+  TensorCubicBSpline     N=  16 val=8.018899e-02 SD=3.972e-03 config={"alpha": 0.01, "n_knots": 3}
+  TensorCubicBSpline     N=  32 val=6.774461e-02 SD=9.098e-04 config={"alpha": 0.01, "n_knots": 3}
+  TensorCubicBSpline     N=  64 val=6.639578e-02 SD=8.526e-04 config={"alpha": 0.01, "n_knots": 4}
+  TensorCubicBSpline     N= 128 val=6.029050e-02 SD=1.462e-03 config={"alpha": 0.01, "n_knots": 4}
+  TensorCubicBSpline     N= 256 val=5.735906e-02 SD=4.119e-04 config={"alpha": 0.01, "n_knots": 4}
+  ThinPlateSpline        N=  16 val=7.457172e-02 SD=3.167e-03 config={"smoothing": 0.1}
+  ThinPlateSpline        N=  32 val=6.391456e-02 SD=1.688e-03 config={"smoothing": 0.1}
+  ThinPlateSpline        N=  64 val=5.088379e-02 SD=1.000e-03 config={"smoothing": 1e-08}
+  ThinPlateSpline        N= 128 val=2.843966e-02 SD=5.063e-03 config={"smoothing": 1e-08}
+  ThinPlateSpline        N= 256 val=1.706478e-02 SD=1.979e-03 config={"smoothing": 1e-08}
+
+Final held-out test results (all models share N=256 and one POD basis):
+  GPR                    field rel-L2=1.003983e-03; regression-only rel-L2=1.442021e-04; POD truncation rel-L2=9.935730e-04; decomposition-check=1.54e-15; flux rel-L2=1.167927e-02; fit=32.408s; predict=0.184ms/case; flux-post=0.084s
+  ThinPlateSpline        field rel-L2=1.651602e-02; regression-only rel-L2=1.648599e-02; POD truncation rel-L2=9.935730e-04; decomposition-check=2.17e-15; flux rel-L2=4.098775e-02; fit=0.003s; predict=0.045ms/case; flux-post=0.083s
+  RBF_Multiquadric       field rel-L2=2.067018e-02; regression-only rel-L2=2.064614e-02; POD truncation rel-L2=9.935730e-04; decomposition-check=1.84e-16; flux rel-L2=9.248481e-02; fit=0.002s; predict=0.037ms/case; flux-post=0.109s
+  ANN                    field rel-L2=2.224403e-02; regression-only rel-L2=2.222167e-02; POD truncation rel-L2=9.935730e-04; decomposition-check=7.96e-16; flux rel-L2=5.371581e-02; fit=4.188s; predict=0.026ms/case; flux-post=0.082s
+  TensorCubicBSpline     field rel-L2=5.835189e-02; regression-only rel-L2=5.834302e-02; POD truncation rel-L2=9.935730e-04; decomposition-check=9.26e-16; flux rel-L2=2.128522e-01; fit=0.004s; predict=0.043ms/case; flux-post=0.084s
+  Polynomial             field rel-L2=7.042892e-02; regression-only rel-L2=7.042141e-02; POD truncation rel-L2=9.935730e-04; decomposition-check=1.40e-15; flux rel-L2=2.490470e-01; fit=0.002s; predict=0.030ms/case; flux-post=0.089s
+
+Interpretation notes:
+  - The POD basis is fitted from training snapshots only.
+  - Regressors within a training run receive the exact same POD basis and coefficients.
+  - Validation data select hyperparameters; the final test data are not used for selection.
+  - The final test comparison uses one common training set and one common POD basis.
+  - Pressure is structurally invariant to logk_mean for the supplied PDE and BCs.
+  - The pressure-active inputs are sampled jointly by a 2D LHS; logk_mean is sampled independently for flux.
+  - The 0--180 degree angle interval is treated as bounded and non-periodic; endpoint fields are checked.
+  - Flux uses all three parameters; predicted flux is post-processed from predicted pressure.
+  - B-splines are tensor-product cubic B-spline regression on scattered data, not exact interpolation.
+  - ThinPlateSpline is an RBFInterpolator thin-plate spline; it is distinct from the tensor B-spline model.
+  - GP interval coverage is measured in POD-coefficient space, not pointwise field space.
+  - These results are conditional on the solver, mesh, parameter bounds and boundary conditions.
+  - This experiment does not establish mesh independence; use your separate solver verification.
