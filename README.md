@@ -30,7 +30,7 @@ The solver is a cell-centred finite-volume code on a 64 × 64 grid (`src/darcy.p
 
 I compared four ways of choosing training simulations: random, Latin hypercube (LHS), scrambled Sobol sequence, and adaptive (start from LHS points, then add batches where the POD-GPR is most uncertain). Each was used with POD-GPR and with a direct neural network (NN) that maps parameters straight to the pressure field. Training sizes were 16 to 256, with 3 repeats each. The configurations chosen on validation data were refitted and tested on 256 held-out cases.
 
-![Figure 1: Validation error against number of training solves, POD-GPR (left) and direct NN (right)](figures/investigation1_validation_error_vs_samples.png)
+![Figure 1: Validation error against number of training solves, POD-GPR (left) and direct NN (right)](figures/validation_error_vs_samples.png)
 
 *Validation error (mean ± SD of 3 runs) against the number of full-order training solves, for each sampling strategy. Left: POD-GPR. Right: direct NN.*
 
