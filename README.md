@@ -43,7 +43,7 @@ I compared four ways of choosing training simulations: random, Latin hypercube (
 | POD-GPR | LHS | 256 | 32 | 9.58e-4 | 3.76e-3 |
 | Direct NN | Sobol | 256 | - | 7.92e-3 | 3.21e-2 |
 
-![Figure 2: Surrogate vs full-order pressure on test cases, POD-GPR and direct NN](figures/investigation1_parity_podgpr_vs_nn.png)
+![Figure 2: Surrogate vs full-order pressure on test cases, POD-GPR and direct NN](figures/sampling_final_test_parity.png)
 
 *Surrogate vs full-order pressure on the 256 test cases. Left: POD-GPR. Right: direct NN.*
 
@@ -62,7 +62,7 @@ Sobol indices of the domain-averaged pressure, computed on the final POD-GPR sur
 | `logk_amp` | 0.070 ± 0.021 | 0.243 ± 0.020 |
 | `pattern_angle_deg` | 0.758 ± 0.043 | 0.935 ± 0.045 |
 
-![Figure 3: First- and total-order Sobol indices of mean pressure](figures/investigation1_sobol_indices.png)
+![Figure 3: First- and total-order Sobol indices of mean pressure](figures/sobol_indices.png)
 
 *First- and total-order Sobol indices with 95% bootstrap intervals (4096 base samples). In the plot the angle is labelled `logk_angle`.*
 
@@ -81,7 +81,7 @@ Section 1 changed the model and the sampling at the same time, so here I held ev
 | Tensor cubic B-spline | 5.84e-2 | 2.13e-1 |
 | Polynomial (Ridge) | 7.04e-2 | 2.49e-1 |
 
-![Figure 4: Surrogate vs full-order pressure for the six regressors](figures/investigation2_pressure_parity.png)
+![Figure 4: Surrogate vs full-order pressure for the six regressors](figures/regression_final_test_parity.png)
 
 *Surrogate vs full-order pressure on the test set for each of the six regressors.*
 
@@ -101,11 +101,11 @@ With the regression fixed to RBF-GPR and the same data at every step, I varied t
 | 128 | 1.57e-4 | 7.0e-6 | 1.6e-4 | 7.6e-4 | 85 s |
 | 255 | 1.57e-4 | 4.9e-7 | 1.6e-4 | 7.6e-4 | 154 s |
 
-![Figure 5: Pressure error against POD rank, split into truncation and regression error](figures/pod_rank_pressure_error_decomposition.png)
+![Figure 5: Pressure error against POD rank, split into truncation and regression error](figures/pressure_error_vs_pod_rank.png)
 
 *Held-out pressure error against POD rank, split into POD truncation and regression error.*
 
-![Figure 6: Flux error against POD rank](figures/pod_rank_flux_error.png)
+![Figure 6: Flux error against POD rank](figures/flux_error_vs_pod_rank.png)
 
 *Held-out flux error against POD rank.*
 
@@ -127,11 +127,11 @@ The earlier sections measure surrogate error as a field error. Here I ask a prac
   - **surrogate, with discrepancy**: the surrogate's error at the sensors is modelled as extra Gaussian noise, estimated from the validation cases
 - Checks: three case studies compared with the full-solver posterior, and a calibration test over 100 truths drawn from the prior (how often the truth lies inside the 90% posterior region).
 
-![Figure 7: Posterior regions for three true parameter sets and three noise levels, POD rank 32](figures/bayes_case_posteriors.png)
+![Figure 7: Posterior regions for three true parameter sets and three noise levels, POD rank 32](figures/fig2_case_posteriors.png)
 
 *Posterior regions (50% and 90%) for three true parameter sets and three noise levels, POD rank 32.*
 
-![Figure 8: Share of truths inside the 90 percent posterior region by POD rank and noise level](figures/bayes_calibration_coverage.png)
+![Figure 8: Share of truths inside the 90 percent posterior region by POD rank and noise level](figures/fig5_calibration_coverage.png)
 
 *Share of 100 truths inside the 90% posterior region, by POD rank and noise level. Target is 0.90.*
 
