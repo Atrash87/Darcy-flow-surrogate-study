@@ -2,7 +2,7 @@
 
 A small side project: how well can a fast surrogate model replace a Darcy-flow solver, and what limits its accuracy? I looked at three things: how the training simulations are chosen, which regression model is used, and how many POD modes are kept.
 
-I was inspired by the work of **[Dr. NAME, paper/topic]** and wanted to try related questions hands-on. This is a personal exploration, not a paper. I am a geologist with a data-analytics background, I used AI tools to help write the code and the text, and every result here is only as good as the setup described below. Corrections and feedback are very welcome.
+I was inspired by the work of **[Dr. NAME, paper/topic]** and wanted to try related questions hands-on. This is a personal exploration, not a paper. I am a geologist with a data-analytics background, I used AI tools to help write the code and the text, and every result here is only as good as the setup described below. I added a Bayesian part at the end because Bayesian methods were part of my PhD work and I wanted to see how they fit this problem. Corrections and feedback are very welcome.
 
 ## In short
 
@@ -10,6 +10,7 @@ I was inspired by the work of **[Dr. NAME, paper/topic]** and wanted to try rela
 2. **With the data and POD basis held fixed, GPR beat five other regressors** (pressure error 1.0e-3 vs 1.7e-2 to 7.0e-2).
 3. **More POD modes help only up to a point.** Pressure error falls until about 64 to 96 modes, then flattens at about 1.6e-4, where the regression, not the POD truncation, is the limit.
 4. **The pattern angle controls most of the variance in mean pressure** (Sobol first-order 0.76, total 0.93). The mean log-permeability has no effect on pressure, as expected.
+5. **Does surrogate error distort Bayesian inference?** Only when the measurement noise is smaller than the surrogate's own error. Then the posterior is overconfident, and modelling the surrogate error fixes most of it (section 5).
 
 ## The problem
 
@@ -112,6 +113,35 @@ Error falls quickly up to about 64 modes, while truncation dominates. From about
 
 Flux error flattens too, at about 7.6e-4, but it is 5 to 12× larger than the pressure error at every rank. That gap is the starting point of idea 3 below.
 
+### 5. Using the surrogate for Bayesian inference
+
+The earlier sections measure surrogate error as a field error. Here I ask a practical question: if you use the surrogate to infer parameters from noisy data, does its error bias or over-sharpen the answer? I chose this because Bayesian inference is where I have the most experience, and it turns the rank findings into a downstream test.
+
+<!-- TODO-VERIFY: all numbers in this section come from my own run of src/bayesian_inversion.py (seed 20261112). Re-run it on your machine and check them against bayesian_inversion_results/summary.md before publishing. -->
+**Setup**
+- Unknowns: `logk_amp` and `pattern_angle_deg`, uniform prior over the ranges above. `logk_mean` is left out because pressure does not depend on it.
+- Data: pressure at 36 sensors from the **full solver** plus Gaussian noise of known size, so the true parameters are known.
+- Posteriors by MCMC, for POD ranks 8, 32 and 64 (same GPR, 256 training solves):
+  - **full solver**: the exact reference posterior
+  - **surrogate, naive**: the surrogate is treated as exact
+  - **surrogate, with discrepancy**: the surrogate's error at the sensors is modelled as extra Gaussian noise, estimated from the validation cases
+- Checks: three case studies compared with the full-solver posterior, and a calibration test over 100 truths drawn from the prior (how often the truth lies inside the 90% posterior region).
+
+> 🖼️ **FIGURE 7 — insert here:** `figures/bayes_case_posteriors.png` (from `fig2_case_posteriors.png`)
+
+*Posterior regions (50% and 90%) for three true parameter sets and three noise levels, POD rank 32.*
+
+> 🖼️ **FIGURE 8 — insert here:** `figures/bayes_calibration_coverage.png` (from `fig5_calibration_coverage.png`)
+
+*Share of 100 truths inside the 90% posterior region, by POD rank and noise level. Target is 0.90.*
+
+**What I saw**
+- **The surrogate matters once noise is below its error.** At the sensors the rank-32 surrogate has an RMS error of about 5e-4. At noise 3e-3 and above, naive and full-solver posteriors are close (naive coverage 88 to 89%). Around 1e-3 the naive one starts to drift (82%).
+- **Rank 32, noise 1e-4: the naive posterior is overconfident.** The truth was inside its 90% region for only 17% of truths, and posterior means were shifted by several reference standard deviations. With the discrepancy model coverage was 92%.
+- **Rank 8 is overconfident for all but the largest noise.** Naive coverage was 1% to 24% at noise 1e-4 to 1e-3. The discrepancy version is then too cautious (98 to 100% coverage at noise 3e-3 and below).
+- **Rank 64: the surrogate error is below the noise,** so both versions agree.
+- **The price of the discrepancy model is width.** At the smallest noise its posteriors are about 3× wider than the full-solver one. That is honest about the surrogate, but it also shows the limit of what this surrogate can resolve.
+
 ## What this does not show
 
 - The ranges and the synthetic heterogeneity pattern are not tied to a real formation. The problem is steady, scalar and isotropic.
@@ -119,6 +149,8 @@ Flux error flattens too, at about 7.6e-4, but it is 5 to 12× larger than the pr
 - Sections 3 and 4 each use a single train/test split. The error floor in section 4 is about 8e-5 on the validation set but 1.6e-4 on the test set, so its exact value depends on the data design.
 - The Sobol indices cover mean pressure only and carry no surrogate-training uncertainty.
 - GPR uncertainty intervals were checked in POD-coefficient space only, and they under-covered (about 82.5% for a nominal 90%). <!-- TODO-VERIFY: 82.5% comes from technical_report.md; check coefficient_coverage90 in the full-run final_heldout_test_results.csv -->
+- The Bayesian test uses synthetic data from the same solver, known i.i.d. Gaussian noise and one fixed training set. It says nothing about real measurements or model misfit. With 100 truths per setting, coverage values are only good to about ±0.06.
+- The discrepancy model uses one covariance for the whole parameter box, although surrogate error varies in space. The reference chains are short (R-hat at most 1.03, effective sample size at least about 220 in my run).
 - Summary tables of the sampling study are included, but the raw data archive from that run was not preserved, so a re-run may not reproduce those exact numbers.
 
 ## Ideas for future work
@@ -128,6 +160,8 @@ Flux error flattens too, at about 7.6e-4, but it is 5 to 12× larger than the pr
 3. **Flux.** Why is flux error 5 to 12× the pressure error? Part of it may be an artefact of how flux is computed: the left-boundary inflow is a finite difference across half a grid cell next to the boundary, where the pressure drop is small, so a tiny pressure error there gets magnified. Compare it with flux through interior faces, a direct flux surrogate, or a separate POD basis for flux.
 4. **Adaptive sampling.** Does uncertainty-driven sampling reach the same accuracy with fewer solves at equal budget? My 3-repeat sweep hints at it but is too noisy to say.
 5. **Mesh generalization.** Train at 32 × 32 or 64 × 64 and test at 128 × 128.
+6. **Better Bayesian treatment.** Let the surrogate-error model vary with the parameters (for example a GP on the residuals), use the GPR's own predictive variance, repeat over several training designs, and try a harder inverse problem with more than two unknowns or less informative data.
+7. **Bayesian sensitivity analysis.** Propagate the GPR posterior into the Sobol indices to get intervals that include surrogate uncertainty, which section 2 lacks.
 
 If any of these overlap with your work, I would be happy to talk.
 
@@ -139,6 +173,7 @@ src/
   sampling_surrogate_study.py      sampling study, POD-GPR vs NN, Sobol analysis
   experiment_a.py                  six-regressor comparison
   pod_rank_sensitivity.py          POD-rank sweep
+  bayesian_inversion.py            Bayesian inference with the surrogate
   smoke_test.py                    quick workflow check (not research results)
 docs/
   technical_report.md              longer report with all tables
@@ -147,6 +182,7 @@ results/
   initial_surrogate_investigation/
   regression_comparison/
   pod_rank_sensitivity/
+  bayesian_inversion/
 figures/
 ```
 
@@ -162,6 +198,8 @@ python src/smoke_test.py             # optional: reduced run of the regression c
 python src/sampling_surrogate_study.py   # writes corrected_surrogate_results/
 python src/experiment_a.py               # writes experiment_a_results/
 python src/pod_rank_sensitivity.py       # writes pod_rank_sensitivity_results/
+python src/bayesian_inversion.py         # writes bayesian_inversion_results/ (about 20 min on 2 CPUs)
+python src/bayesian_inversion.py --quick # short check of the workflow
 ```
 
 The sampling study needs `SALib` for the Sobol analysis. Smoke-test runs use coarse meshes and few samples. They are a software check only, and none of the numbers above come from them.
