@@ -81,7 +81,7 @@ Section 1 changed the model and the sampling at the same time, so here I held ev
 | Tensor cubic B-spline | 5.84e-2 | 2.13e-1 |
 | Polynomial (Ridge) | 7.04e-2 | 2.49e-1 |
 
-![Figure 4: Surrogate vs full-order pressure for the six regressors](figures/regression_final_test_parity.png)
+![Figure 4: Surrogate vs full-order pressure for the six regressors](figures/final_test_parity.png)
 
 *Surrogate vs full-order pressure on the test set for each of the six regressors.*
 
