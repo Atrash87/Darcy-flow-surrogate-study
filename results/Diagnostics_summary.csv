@@ -1,0 +1,13 @@
+source,pod_rank,likelihood,runs,rhat_gt_1p05,ess_lt_200,multimodal,acceptance_mean
+calibration,8,disc,500,0.0,0.0,0.0,0.300896
+calibration,8,naive,500,0.0,0.0,0.0,0.301015
+calibration,32,disc,500,0.0,0.0,0.0,0.3000785
+calibration,32,naive,500,0.0,0.0,0.0,0.30072525
+calibration,64,disc,500,0.0,0.0,0.0,0.30046999999999996
+calibration,64,naive,500,0.0,0.0,0.0,0.29958274999999995
+case study,8,disc,9,0.0,0.0,0.0,0.3065972222222222
+case study,8,naive,9,0.0,0.0,0.0,0.2761944444444444
+case study,32,disc,9,0.0,0.0,0.0,0.2983194444444444
+case study,32,naive,9,0.0,0.0,0.0,0.2784444444444445
+case study,64,disc,9,0.0,0.0,0.0,0.2859583333333333
+case study,64,naive,9,0.0,0.0,0.0,0.30483333333333335

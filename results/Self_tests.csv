@@ -1,0 +1,5 @@
+test,result,passed
+MCMC recovers a known 2D Gaussian,"max mean error 0.035 sd, max cov error 3.8%",True
+"Spline table vs full solver at sensors (rank 32, 10 validation points)",max abs error 2.99e-03,True
+Single-point solver path equals batch solver path,max abs diff 1.3e-14,True
+Spline Jacobian equals finite differences,relative error 2.2e-10,True
