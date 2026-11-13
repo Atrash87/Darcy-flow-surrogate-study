@@ -53,7 +53,7 @@ For POD-GPR the largest pointwise error on any test case is about 0.008 on a pre
 
 ### 2. Which parameters matter for mean pressure?
 
-Sobol indices of the domain-averaged pressure, computed on the final POD-GPR surrogate with independent uniform inputs over the ranges above (4096 base samples, 200 bootstrap resamples). The estimates were stable from about 2048 base samples. <!-- TODO-VERIFY: read off the convergence plot; no convergence data file was available -->
+Sobol indices of the domain-averaged pressure, computed on the final POD-GPR surrogate with independent uniform inputs over the ranges above (4096 base samples, 200 bootstrap resamples). <!-- TODO-VERIFY: read off the convergence plot; no convergence data file was available -->
 
 
 | Parameter | First-order | Total-order |
