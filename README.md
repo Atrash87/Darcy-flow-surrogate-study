@@ -177,6 +177,7 @@ Figure 9 shows example posteriors and Figure 10 the calibration test.
 5. **Mesh refinement and generalization.** Repeat the study at 32 × 32 and 128 × 128 to see whether the conclusions depend on resolution, and train at 32 × 32 or 64 × 64 and test at 128 × 128.
 6. **Better Bayesian treatment.** Let the surrogate-error model vary with the parameters (for example a GP on the residuals), use the GPR's own predictive variance, repeat over several training designs, and try a harder inverse problem with more than two unknowns or less informative data.
 7. **Bayesian sensitivity analysis.** Propagate the GPR posterior into the Sobol indices to get intervals that include surrogate uncertainty, which section 2 lacks.
+8. Trust-aware surrogates. Can a surrogate say not only what it predicts, but also when its prediction should not be trusted? The GPR intervals here under-covered (see “What this does not show”), so a first step would be a calibrated error estimate, for example conformal prediction or a reduced-basis error estimator. It would be tested on held-out cases for coverage and for how often it wrongly accepts or rejects a prediction. A second step is to use that estimate to decide where extra full-order simulations would help most, and to compare this with simply adding LHS points at equal budget. A third step is to expose the surrogate and its trust flag as a tool that an AI agent can call, falling back to the full solver when the flag says the prediction is unreliable.
 
 If any of these overlap with your work, I would be happy to talk.
 
