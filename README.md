@@ -2,7 +2,7 @@
 
 A small side project: how well can a fast surrogate model replace a Darcy-flow solver, and what limits its accuracy? I looked at three things: how the training simulations are chosen, which regression model is used, and how many POD modes are kept.
 
-I was inspired by the work of **[Prof. Dr. Denise Degen]** and the Platypus paper **(Hayek et al., 2026, see References)** and wanted to try related questions hands-on. This is a personal exploration, not a paper. I am a geologist with a data-analytics background, I used AI tools to help write the code and the text, and every result here is only as good as the setup described below. I added a Bayesian part at the end because Bayesian methods were part of my PhD work and I wanted to see how they fit this problem. Corrections and feedback are very welcome.
+I was inspired by the work of **(Prof. Dr. Denise Degen)** and the Platypus paper **(Hayek et al., 2026, see References)** and wanted to try related questions hands-on. This is a personal exploration, not a paper. I am a geologist with a data-analytics background, I used AI tools to help write the code and the text, and every result here is only as good as the setup described below. I added a Bayesian part at the end because Bayesian methods were part of my PhD work and I wanted to see how they fit this problem. Corrections and feedback are very welcome.
 
 ## In short
 
