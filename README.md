@@ -2,7 +2,7 @@
 
 A small side project: how well can a fast surrogate model replace a Darcy-flow solver, and what limits its accuracy? I looked at three things: how the training simulations are chosen, which regression model is used, and how many POD modes are kept.
 
-I was inspired by the work of **Prof. Dr. Denise Degen** and the Platypus paper (Hayek et al., 2026, see [References](#references)), and wanted to try related questions hands-on on a much smaller problem. This is a personal exploration, not a paper. I am a geologist (my PhD work included reservoir modelling and machine learning), I used AI tools to help write the code and the text, and every result here is only as good as the setup described below. I added a Bayesian part at the end because Bayesian methods were part of my PhD work and I wanted to see how they fit this problem. Corrections and feedback are very welcome.
+I was inspired by the work of **Prof. Dr. Denise Degen** and the Platypus paper (Hayek et al., 2026, see [References](#references)), and wanted to try related questions hands-on on a much smaller problem. This is a personal exploration, not a paper. I am a geologist (my PhD work included reservoir modelling and machine learning), AI tools wrote most of the code and drafted the text. I chose the questions, directed the work, ran the experiments and checked the results, and I take responsibility for what is published here. Every result is only as good as the setup described below. I added a Bayesian part at the end because Bayesian methods were part of my PhD work and I wanted to see how they fit this problem. Corrections and feedback are very welcome.
 
 ## In short
 
@@ -21,6 +21,8 @@ Steady Darcy flow on the unit square, -∇·(k ∇p) = 0, with p = 1 on the left
 | `logk_mean` (μ) | -1 to 1 | Scales k by a constant. Leaves pressure unchanged, only scales flux. |
 | `logk_amp` (a) | 0.2 to 1.5 | Strength of the heterogeneity pattern. |
 | `pattern_angle_deg` (θ) | 0° to 180° | Rotates the pattern. Called `logk_angle` in the sampling-study plots. |
+
+The pipeline is: full-order solver → parameter sampling → snapshot matrix → POD basis → GPR for the POD coefficients → reconstructed pressure field → error evaluation.
 
 The solver is a cell-centred finite-volume code on a 64 × 64 grid (`src/darcy.py`). The ranges are study choices, not real geological limits. Because `logk_mean` cannot change the pressure, the pressure surrogates in the controlled study (sections 3 and 4) use only amplitude and angle. "Flux" throughout means the total inflow through the left boundary. It is computed from the predicted pressure in the first column of cells and uses all three parameters.
 
@@ -135,7 +137,7 @@ The numbers below are from one full run of `src/bayesian_inversion.py` (random s
 - Posteriors by MCMC, for POD ranks 8, 32 and 64 (same GPR, 256 training solves):
   - **full solver**: the exact reference posterior
   - **surrogate, naive**: the surrogate is treated as exact
-  - **surrogate, with discrepancy**: the surrogate's error at the sensors is modelled as extra Gaussian noise, estimated from the validation cases
+  - **surrogate, with discrepancy**: the surrogate's error at the 36 sensors is modelled as a Gaussian with a mean and a full covariance matrix across the sensors (Ledoit-Wolf shrinkage), estimated from 128 validation cases. These cases are separate from the training set and from the calibration truths
 - Checks: three case studies compared with the full-solver posterior, and a calibration test over 100 truths drawn from the prior (how often the truth lies inside the 90% posterior region).
 
 Figure 9 shows example posteriors and Figure 10 the calibration test.
@@ -158,12 +160,12 @@ Figure 9 shows example posteriors and Figure 10 the calibration test.
 ## What this does not show
 
 - The ranges and the synthetic heterogeneity pattern are not tied to a real formation. The problem is steady, scalar and isotropic.
-- Everything uses one 64 × 64 grid, so mesh independence is not tested.
+- Everything uses one 64 × 64 grid, so mesh independence is not tested. The study measures how well the surrogate reproduces this discretized solver, not the accuracy of the physical solution.
 - Sections 3 and 4 each use a single train/test split. The error floor in section 4 is about 8e-5 on the validation set but 1.6e-4 on the test set, so its exact value depends on the data design.
 - The Sobol indices cover mean pressure only and carry no surrogate-training uncertainty.
 - GPR uncertainty intervals were checked in POD-coefficient space only, and they under-covered (about 82.5% for a nominal 90% and 86.9% for a nominal 95%).
 - The Bayesian test uses synthetic data from the same solver, known i.i.d. Gaussian noise and one fixed training set. It says nothing about real measurements or model misfit. With 100 truths per setting, coverage values are only good to about ±0.06.
-- The discrepancy model uses one covariance for the whole parameter box, although surrogate error varies in space. The reference chains are short (R-hat at most 1.03, effective sample size at least about 220 in my run).
+- The discrepancy model uses one mean and one covariance for the whole parameter box, although surrogate error varies with the parameters, and whether the residuals are really Gaussian was not tested. The reference chains are short (R-hat at most 1.03, effective sample size at least about 220 in my run).
 - Summary tables of the sampling study are included, but the raw data archive from that run was not preserved, so a re-run may not reproduce those exact numbers.
 
 ## Ideas for future work
@@ -172,7 +174,7 @@ Figure 9 shows example posteriors and Figure 10 the calibration test.
 2. **Regression families at higher rank.** Does GPR stay best at 96 modes? Re-running the sampling comparison with more modes would also show how much of section 1 was truncation.
 3. **Flux.** Why is flux error 5 to 12× the pressure error? Part of it may be an artefact of how flux is computed: the left-boundary inflow is a finite difference across half a grid cell next to the boundary, where the pressure drop is small, so a tiny pressure error there gets magnified. Compare it with flux through interior faces, a direct flux surrogate, or a separate POD basis for flux.
 4. **Adaptive sampling.** Does uncertainty-driven sampling reach the same accuracy with fewer solves at equal budget? My 3-repeat sweep hints at it but is too noisy to say.
-5. **Mesh generalization.** Train at 32 × 32 or 64 × 64 and test at 128 × 128.
+5. **Mesh refinement and generalization.** Repeat the study at 32 × 32 and 128 × 128 to see whether the conclusions depend on resolution, and train at 32 × 32 or 64 × 64 and test at 128 × 128.
 6. **Better Bayesian treatment.** Let the surrogate-error model vary with the parameters (for example a GP on the residuals), use the GPR's own predictive variance, repeat over several training designs, and try a harder inverse problem with more than two unknowns or less informative data.
 7. **Bayesian sensitivity analysis.** Propagate the GPR posterior into the Sobol indices to get intervals that include surrogate uncertainty, which section 2 lacks.
 
