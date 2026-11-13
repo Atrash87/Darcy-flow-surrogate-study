@@ -51,6 +51,8 @@ For POD-GPR the largest pointwise error on any test case is about 0.008 on a pre
 
 **Two caveats.** The final models used different sampling strategies (LHS vs Sobol), so the 8× gap does not isolate the regression method. That is why section 3 exists. Also, POD-GPR used about 32 modes here (the number picked automatically by keeping 99.99% of the snapshot energy), and section 4 suggests that at 32 modes the error is mostly POD truncation. So 9.6e-4 is probably not the best POD-GPR can do with this data. I have not re-run this study with more modes.
 
+![Figure 2: Surrogate vs full-order pressure on test cases, POD-GPR and direct NN](figures/final_spatial_error_maps.png)
+
 ### 2. Which parameters matter for mean pressure?
 
 Sobol indices of the domain-averaged pressure, computed on the final POD-GPR surrogate with independent uniform inputs over the ranges above (4096 base samples, 200 bootstrap resamples). <!-- TODO-VERIFY: read off the convergence plot; no convergence data file was available -->
