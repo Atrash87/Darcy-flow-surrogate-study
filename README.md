@@ -2,11 +2,11 @@
 
 A small side project: how well can a fast surrogate model replace a Darcy-flow solver, and what limits its accuracy? I looked at three things: how the training simulations are chosen, which regression model is used, and how many POD modes are kept.
 
-I was inspired by the work of **(Prof. Dr. Denise Degen)** and the Platypus paper **(Hayek et al., 2026, see References)** and wanted to try related questions hands-on. This is a personal exploration, not a paper. I am a geologist with a data-analytics background, I used AI tools to help write the code and the text, and every result here is only as good as the setup described below. I added a Bayesian part at the end because Bayesian methods were part of my PhD work and I wanted to see how they fit this problem. Corrections and feedback are very welcome.
+I was inspired by the work of **Prof. Dr. Denise Degen** and the Platypus paper (Hayek et al., 2026, see [References](#references)), and wanted to try related questions hands-on on a much smaller problem. This is a personal exploration, not a paper. I am a geologist (my PhD work included reservoir modelling and machine learning), I used AI tools to help write the code and the text, and every result here is only as good as the setup described below. I added a Bayesian part at the end because Bayesian methods were part of my PhD work and I wanted to see how they fit this problem. Corrections and feedback are very welcome.
 
 ## In short
 
-1. **POD + Gaussian-process regression (POD-GPR) beat a direct neural network by about 8×** on held-out test cases (relative L2 error 9.6e-4 vs 7.9e-3). The two used different sampling strategies, so this is not a clean comparison.
+1. **POD + Gaussian-process regression (POD-GPR) beat a direct neural network by about 8×** on held-out test cases (relative L2 error 9.6e-4 vs 7.9e-3), with 256 training solves each. The two used different sampling strategies, so this is not a clean comparison.
 2. **With the data and POD basis held fixed, GPR beat five other regressors** (pressure error 1.0e-3 vs 1.7e-2 to 7.0e-2).
 3. **More POD modes help only up to a point.** Pressure error falls until about 64 to 96 modes, then flattens at about 1.6e-4, where the regression, not the POD truncation, is the limit.
 4. **The pattern angle controls most of the variance in mean pressure** (Sobol first-order 0.76, total 0.93). The mean log-permeability has no effect on pressure, as expected.
@@ -28,34 +28,38 @@ The solver is a cell-centred finite-volume code on a 64 × 64 grid (`src/darcy.p
 
 ### 1. Sampling strategy, and POD-GPR vs a direct neural network
 
-I compared four ways of choosing training simulations: random, Latin hypercube (LHS), scrambled Sobol sequence, and adaptive (start from LHS points, then add batches where the POD-GPR is most uncertain). Each was used with POD-GPR and with a direct neural network (NN) that maps parameters straight to the pressure field. Training sizes were 16 to 256, with 3 repeats each. The configurations chosen on validation data were refitted and tested on 256 held-out cases.
+I compared four ways of choosing training simulations: random, Latin hypercube (LHS), scrambled Sobol sequence, and adaptive (start from LHS points, then add batches where the POD-GPR is most uncertain). Each was used with POD-GPR and with a direct neural network (NN) that maps parameters straight to the pressure field. Training sizes were 16 to 256, with 3 repeats each. The configurations chosen on validation data were refitted and tested on 256 held-out cases. Figure 1 shows the validation error.
 
-![Figure 1: Validation error against number of training solves, POD-GPR (left) and direct NN (right)](figures/validation_error_vs_samples.png)
+![Figure 1](figures/validation_error_vs_samples.png)
 
-*Validation error (mean ± SD of 3 runs) against the number of full-order training solves, for each sampling strategy. Left: POD-GPR. Right: direct NN.*
+**Figure 1.** Validation error (mean ± SD of 3 runs) against the number of full-order training solves, for each sampling strategy. Left: POD-GPR. Right: direct NN.
 
 - **POD-GPR needs far fewer simulations.** At 128 solves it is at 3e-3 to 1.2e-2, while the NN is still at 4e-2 to 6e-2.
 - **At 256 solves, random, LHS and adaptive sampling are indistinguishable** for POD-GPR (all about 1.0 to 1.1e-3). Sobol sampling was erratic (individual runs: 8.7e-4, 5.5e-3 and 1.8e-2).
 - **Adaptive sampling had the lowest mean error at 32, 64 and 128 solves**, but with 3 repeats and overlapping spread this is a hint, not a result.
+
+The final models were then tested on 256 held-out cases (table below and Figure 2).
 
 | Model | Sampling (picked on validation) | Training solves | POD modes | Test rel. L2 (global) | Worst test case |
 |---|---|---|---|---|---|
 | POD-GPR | LHS | 256 | 32 | 9.58e-4 | 3.76e-3 |
 | Direct NN | Sobol | 256 | - | 7.92e-3 | 3.21e-2 |
 
-![Figure 2: Surrogate vs full-order pressure on test cases, POD-GPR and direct NN](figures/sampling_final_test_parity.png)
+![Figure 2](figures/sampling_final_test_parity.png)
 
-*Surrogate vs full-order pressure on the 256 test cases. Left: POD-GPR. Right: direct NN.*
+**Figure 2.** Surrogate vs full-order pressure on the 256 test cases. Left: POD-GPR. Right: direct NN.
 
-For POD-GPR the largest pointwise error on any test case is about 0.008 on a pressure range of 0 to 1, and it is spatially structured rather than random.
+For POD-GPR the largest pointwise error on any test case is about 0.008 on a pressure range of 0 to 1. Figure 3 shows that worst case: the error is made of smooth patches of alternating sign, not random noise.
+
+![Figure 3](figures/worst_case_pressure_error.png)
+
+**Figure 3.** POD-GPR pressure error (surrogate minus full-order) for the worst test case. Positive and negative patches alternate; the largest magnitude is about 0.008.
 
 **Two caveats.** The final models used different sampling strategies (LHS vs Sobol), so the 8× gap does not isolate the regression method. That is why section 3 exists. Also, POD-GPR used about 32 modes here (the number picked automatically by keeping 99.99% of the snapshot energy), and section 4 suggests that at 32 modes the error is mostly POD truncation. So 9.6e-4 is probably not the best POD-GPR can do with this data. I have not re-run this study with more modes.
 
-![Figure 2: Surrogate vs full-order pressure on test cases, POD-GPR and direct NN](figures/final_spatial_error_maps.png)
-
 ### 2. Which parameters matter for mean pressure?
 
-Sobol indices of the domain-averaged pressure, computed on the final POD-GPR surrogate with independent uniform inputs over the ranges above (4096 base samples, 200 bootstrap resamples). <!-- TODO-VERIFY: read off the convergence plot; no convergence data file was available -->
+Sobol indices of the domain-averaged pressure, computed on the final POD-GPR surrogate with independent uniform inputs over the ranges above (4096 base samples, 200 bootstrap resamples).
 
 
 | Parameter | First-order | Total-order |
@@ -64,11 +68,11 @@ Sobol indices of the domain-averaged pressure, computed on the final POD-GPR sur
 | `logk_amp` | 0.070 ± 0.021 | 0.243 ± 0.020 |
 | `pattern_angle_deg` | 0.758 ± 0.043 | 0.935 ± 0.045 |
 
-![Figure 3: First- and total-order Sobol indices of mean pressure](figures/sobol_indices.png)
+![Figure 4](figures/sobol_indices.png)
 
-*First- and total-order Sobol indices with 95% bootstrap intervals (4096 base samples). In the plot the angle is labelled `logk_angle`.*
+**Figure 4.** First- and total-order Sobol indices of mean pressure with 95% bootstrap intervals (4096 base samples). In the plot the angle is labelled `logk_angle`.
 
-The angle dominates. For the amplitude, the total-order index is much larger than the first-order one, which points to interaction with the angle. The zero for `logk_mean` is a sanity check, not a finding. The intervals reflect Sobol sampling only, not surrogate error, and the analysis covers mean pressure, not flux.
+Figure 4 shows the same numbers. The angle dominates. For the amplitude, the total-order index is much larger than the first-order one, which points to interaction with the angle. The zero for `logk_mean` is a sanity check, not a finding. The intervals reflect Sobol sampling only, not surrogate error, and the analysis covers mean pressure, not flux.
 
 ### 3. Six regression families on a shared POD basis
 
@@ -79,16 +83,21 @@ Section 1 changed the model and the sampling at the same time, so here I held ev
 | **GPR (RBF)** | **1.0e-3** | **1.17e-2** |
 | Thin-plate spline | 1.65e-2 | 4.10e-2 |
 | Multiquadric RBF | 2.07e-2 | 9.25e-2 |
-| ANN | 2.22e-2 | 5.37e-2 |
+| ANN* | 2.22e-2 | 5.37e-2 |
 | Tensor cubic B-spline | 5.84e-2 | 2.13e-1 |
 | Polynomial (Ridge) | 7.04e-2 | 2.49e-1 |
 
-![Figure 4: Surrogate vs full-order pressure for the six regressors](figures/regression_final_test_parity.png)
+Figure 5 shows predicted against true pressure for each regressor, and Figure 6 where in the domain the errors occur.
 
-*Surrogate vs full-order pressure on the test set for each of the six regressors.*
+![Figure 5](figures/regression_final_test_parity.png)
 
-<!-- TODO-VERIFY: only the GPR row is confirmed (it matches the rank-32 row of the rank sweep). The other five rows, the ANN iteration limit and the truncation/regression split come from technical_report.md. Check them against experiment_a_results/final_heldout_test_results.csv from the full run. -->
-At 32 modes the GPR error is mostly POD truncation (9.9e-4), not regression (1.4e-4). For the other five families nearly all of the error is regression error. The ANN stopped at its iteration limit (2500) without converging, so its number is not a fully converged result.
+**Figure 5.** Surrogate vs full-order pressure on the test set for each of the six regressors.
+
+![Figure 6](figures/final_spatial_error_maps.png)
+
+**Figure 6.** Mean absolute pressure error over the test cases, for each regressor. Each panel has its own colour scale, so compare the colour-bar values, not the colours: the GPR maximum is below 0.001, the polynomial and B-spline maxima are about 0.05. For the other regressors the errors are largest in the upper part of the domain.
+
+At 32 modes the GPR error is mostly POD truncation (9.9e-4), not regression (1.4e-4). For the other five families nearly all of the error is regression error. \* The ANN stopped at its iteration limit (2500) without converging, so it may improve with longer training and its number is not a fully converged result.
 
 ### 4. How many POD modes?
 
@@ -103,23 +112,23 @@ With the regression fixed to RBF-GPR and the same data at every step, I varied t
 | 128 | 1.57e-4 | 7.0e-6 | 1.6e-4 | 7.6e-4 | 85 s |
 | 255 | 1.57e-4 | 4.9e-7 | 1.6e-4 | 7.6e-4 | 154 s |
 
-![Figure 5: Pressure error against POD rank, split into truncation and regression error](figures/pressure_error_vs_pod_rank.png)
+![Figure 7](figures/pressure_error_vs_pod_rank.png)
 
-*Held-out pressure error against POD rank, split into POD truncation and regression error.*
+**Figure 7.** Held-out pressure error against POD rank, split into POD truncation and regression error.
 
-![Figure 6: Flux error against POD rank](figures/flux_error_vs_pod_rank.png)
+![Figure 8](figures/flux_error_vs_pod_rank.png)
 
-*Held-out flux error against POD rank.*
+**Figure 8.** Held-out flux error against POD rank.
 
-Error falls quickly up to about 64 modes, while truncation dominates. From about 96 modes on, the total is flat at about 1.6e-4 because regression error has become the limit, and extra modes only add cost: fit time roughly doubles from 96 to 255 modes, and prediction time per case grows about 5×. The validation errors for 96 to 255 modes are nearly identical (8.0 to 8.1e-5), so I would call 96 a practical knee **for this 256-sample design**, not a general optimum.
+In Figure 7, the error falls quickly up to about 64 modes, while truncation dominates. From about 96 modes on, the total is flat at about 1.6e-4 because regression error has become the limit, and extra modes only add cost: fit time roughly doubles from 96 to 255 modes, and prediction time per case grows about 5×. The validation errors for 96 to 255 modes are nearly identical (8.0 to 8.1e-5), so I would call 96 a practical knee **for this 256-sample design**, not a general optimum.
 
-Flux error flattens too, at about 7.6e-4, but it is 5 to 12× larger than the pressure error at every rank. That gap is the starting point of idea 3 below.
+Flux error (Figure 8) flattens too, at about 7.6e-4, but it is 5 to 12× larger than the pressure error at every rank. That gap is the starting point of idea 3 below.
 
 ### 5. Using the surrogate for Bayesian inference
 
 The earlier sections measure surrogate error as a field error. Here I ask a practical question: if you use the surrogate to infer parameters from noisy data, does its error bias or over-sharpen the answer? I chose this because Bayesian inference is where I have the most experience, and it turns the rank findings into a downstream test.
 
-<!-- TODO-VERIFY: all numbers in this section come from my own run of src/bayesian_inversion.py (seed 20261112). Re-run it on your machine and check them against bayesian_inversion_results/summary.md before publishing. -->
+The numbers below are from one full run of `src/bayesian_inversion.py` (random seed 20261112).
 **Setup**
 - Unknowns: `logk_amp` and `pattern_angle_deg`, uniform prior over the ranges above. `logk_mean` is left out because pressure does not depend on it.
 - Data: pressure at 36 sensors from the **full solver** plus Gaussian noise of known size, so the true parameters are known.
@@ -129,13 +138,15 @@ The earlier sections measure surrogate error as a field error. Here I ask a prac
   - **surrogate, with discrepancy**: the surrogate's error at the sensors is modelled as extra Gaussian noise, estimated from the validation cases
 - Checks: three case studies compared with the full-solver posterior, and a calibration test over 100 truths drawn from the prior (how often the truth lies inside the 90% posterior region).
 
-![Figure 7: Posterior regions for three true parameter sets and three noise levels, POD rank 32](figures/fig2_case_posteriors.png)
+Figure 9 shows example posteriors and Figure 10 the calibration test.
 
-*Posterior regions (50% and 90%) for three true parameter sets and three noise levels, POD rank 32.*
+![Figure 9](figures/fig2_case_posteriors.png)
 
-![Figure 8: Share of truths inside the 90 percent posterior region by POD rank and noise level](figures/fig5_calibration_coverage.png)
+**Figure 9.** Posterior regions (50% and 90%) for three true parameter sets and three noise levels, POD rank 32.
 
-*Share of 100 truths inside the 90% posterior region, by POD rank and noise level. Target is 0.90.*
+![Figure 10](figures/fig5_calibration_coverage.png)
+
+**Figure 10.** Share of 100 truths inside the 90% posterior region, by POD rank and noise level. Target is 0.90.
 
 **What I saw**
 - **The surrogate matters once noise is below its error.** At the sensors the rank-32 surrogate has an RMS error of about 5e-4. At noise 3e-3 and above, naive and full-solver posteriors are close (naive coverage 88 to 89%). Around 1e-3 the naive one starts to drift (82%).
@@ -150,7 +161,7 @@ The earlier sections measure surrogate error as a field error. Here I ask a prac
 - Everything uses one 64 × 64 grid, so mesh independence is not tested.
 - Sections 3 and 4 each use a single train/test split. The error floor in section 4 is about 8e-5 on the validation set but 1.6e-4 on the test set, so its exact value depends on the data design.
 - The Sobol indices cover mean pressure only and carry no surrogate-training uncertainty.
-- GPR uncertainty intervals were checked in POD-coefficient space only, and they under-covered (about 82.5% for a nominal 90%). <!-- TODO-VERIFY: 82.5% comes from technical_report.md; check coefficient_coverage90 in the full-run final_heldout_test_results.csv -->
+- GPR uncertainty intervals were checked in POD-coefficient space only, and they under-covered (about 82.5% for a nominal 90% and 86.9% for a nominal 95%).
 - The Bayesian test uses synthetic data from the same solver, known i.i.d. Gaussian noise and one fixed training set. It says nothing about real measurements or model misfit. With 100 truths per setting, coverage values are only good to about ±0.06.
 - The discrepancy model uses one covariance for the whole parameter box, although surrogate error varies in space. The reference chains are short (R-hat at most 1.03, effective sample size at least about 220 in my run).
 - Summary tables of the sampling study are included, but the raw data archive from that run was not preserved, so a re-run may not reproduce those exact numbers.
@@ -206,10 +217,14 @@ python src/bayesian_inversion.py --quick # short check of the workflow
 
 The sampling study needs `SALib` for the Sobol analysis. Smoke-test runs use coarse meshes and few samples. They are a software check only, and none of the numbers above come from them.
 
+## Related work
+
+Platypus (Hayek et al., 2026) builds surrogates with the non-intrusive reduced-basis method: POD for the basis, then Gaussian-process regression or a neural network for the coefficients, with a POD energy threshold, Latin hypercube sampling and Sobol analysis via SALib. This repository is a small, Darcy-flow version of the same recipe, written independently with a finite-volume solver, and it is not a reproduction of their package. The Platypus outlook mentions adaptive sampling and low-discrepancy sequences as possible extensions, which section 1 tries on the toy problem.
+
 ## References
 
 Hayek, J. N., Cacace, M., Faber, M., Gruzdeva, Y., and Degen, D.: Platypus: a Python package for automated surrogate-assisted analysis of process-based simulations via the non-intrusive reduced-basis method, Adv. Geosci., 68, 1–11, https://doi.org/10.5194/adgeo-68-1-2026, 2026.
 
 ## Contact
 
-Hasan, Berlin · [hasan.alatrash87@gmail.com]
+Hasan, Berlin · hasan.alatrash87@gmail.com
